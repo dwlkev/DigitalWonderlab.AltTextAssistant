@@ -1,0 +1,25 @@
+{
+  "$schema": "../../umbraco-package-schema.json",
+  "name": "AltTextAssistant",
+  "version": "1.0.0",
+  "extensions": [
+    {
+      "type": "dashboard",
+      "alias": "altTextAssistantDashboard",
+      "name": "Alt Text Assistant",
+      "js": "/App_Plugins/AltTextAssistant/alt-text-assistant-dashboard.js?v=PACKAGE_VERSION",
+      "elementName": "alt-text-assistant-dashboard",
+      "weight": 10,
+      "meta": {
+        "label": "Alt Text Assistant",
+        "pathname": "alt-text-assistant"
+      },
+      "conditions": [
+        {
+          "alias": "Umb.Condition.SectionAlias",
+          "match": "Umb.Section.Media"
+        }
+      ]
+    }
+  ]
+}

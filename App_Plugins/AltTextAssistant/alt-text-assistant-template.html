@@ -1,0 +1,75 @@
+<div class="dashboard-header">
+    <h2>Alt Text Assistant</h2>
+    <div class="header-actions">
+        <span id="alt-count-badge" class="count-badge" style="display:none;"></span>
+        <uui-button id="alt-bulk-suggest-btn" look="primary" color="default" label="Bulk Suggest with AI" style="display:none;">Bulk Suggest with AI &#10024;</uui-button>
+        <uui-button id="alt-refresh-btn" look="secondary" label="Refresh">Refresh</uui-button>
+    </div>
+</div>
+
+<div id="alt-field-warning" class="field-warning" style="display:none;">
+    <strong>No alt text field found.</strong>
+    <span id="alt-field-warning-msg"></span>
+</div>
+
+<div id="alt-loading" class="loading">
+    <div class="spinner"></div>
+    <div>Loading images...</div>
+</div>
+
+<div id="alt-error" class="error-state">
+    <p id="alt-error-msg">Something went wrong.</p>
+    <uui-button id="alt-error-retry" look="secondary" label="Retry">Retry</uui-button>
+</div>
+
+<div id="alt-empty" class="empty-state">
+    <div class="empty-state-icon">&#10003;</div>
+    <h3>All images have alt text</h3>
+    <p>Great job! Every image in the media library has alt text set.</p>
+</div>
+
+<div id="alt-table-wrap" class="table-container" style="display:none;">
+    <uui-table id="alt-table" aria-label="Images missing alt text">
+        <uui-table-head>
+            <uui-table-head-cell style="width:80px;">Thumbnail</uui-table-head-cell>
+            <uui-table-head-cell>Name</uui-table-head-cell>
+            <uui-table-head-cell style="width:110px;">Created</uui-table-head-cell>
+            <uui-table-head-cell class="suggestion-cell" style="width:250px;">Suggested Alt Text</uui-table-head-cell>
+            <uui-table-head-cell style="width:296px;">Actions</uui-table-head-cell>
+        </uui-table-head>
+    </uui-table>
+    <div id="alt-bulk-actions" class="bulk-actions" style="display:none;">
+        <span id="alt-bulk-progress" class="bulk-progress"></span>
+        <div class="bulk-actions-buttons">
+            <uui-button id="alt-bulk-cancel" look="secondary" label="Cancel">Cancel</uui-button>
+            <uui-button id="alt-bulk-save" look="primary" color="positive" label="Save All" disabled>Save All</uui-button>
+        </div>
+    </div>
+    <div class="pagination">
+        <span id="alt-page-info"></span>
+        <div class="pagination-buttons">
+            <uui-button id="alt-prev-btn" look="secondary" disabled label="Previous">Previous</uui-button>
+            <uui-button id="alt-next-btn" look="secondary" disabled label="Next">Next</uui-button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="alt-modal" class="modal-overlay">
+    <div class="modal">
+        <h3 id="alt-modal-title">Add Alt Text</h3>
+        <img id="alt-modal-preview" class="modal-preview" src="" alt="" />
+        <div class="suggest-row">
+            <label for="alt-modal-input">Alt text</label>
+            <uui-button id="alt-modal-suggest" look="outline" color="default" label="Suggest with AI" compact style="display:none;">Suggest with AI</uui-button>
+        </div>
+        <div id="alt-ai-notice" class="ai-notice" style="display:none;">
+            AI suggestions are turned off. To enable them, add an AI provider API key (Anthropic, OpenAI, or Google) under the <code>AltTextAssistant</code> section of <code>appsettings.json</code>. See the <a href="https://github.com/dwlkev/DigitalWonderlab.AltTextAssistant#configuration" target="_blank">package README</a> for setup.
+        </div>
+        <textarea id="alt-modal-input" placeholder="Describe this image..."></textarea>
+        <div class="modal-actions">
+            <uui-button id="alt-modal-cancel" look="secondary" label="Cancel">Cancel</uui-button>
+            <uui-button id="alt-modal-save" look="primary" color="positive" label="Save">Save</uui-button>
+        </div>
+    </div>
+</div>

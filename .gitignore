@@ -1,0 +1,20 @@
+# Build output
+bin/
+obj/
+artifacts/
+
+# User/IDE files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local tooling cache
+.dotnet_home/
+/.claude/settings.local.json
+/CLAUDE.md

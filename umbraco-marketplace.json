@@ -1,0 +1,37 @@
+{
+  "$schema": "https://marketplace.umbraco.com/umbraco-marketplace-schema.json",
+  "AuthorDetails": {
+    "Name": "Digital Wonderlab",
+    "Description": "As a proud Certified B Corporation®, we are passionate about amplifying the voices and visions of purpose-driven start-ups, SMEs, not-for-profits, and global enterprises.",
+    "Url": "https://digitalwonderlab.com",
+    "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/dwl-marketplace.png",
+    "Contributors": [
+      {
+        "Name": "Kevin Triggle"
+      }
+    ],
+    "SyncContributorsFromRepository": false
+  },
+  "Category": "Editor Tools",
+  "IssueTrackerUrl": "https://github.com/dwlkev/DigitalWonderlab.AltTextAssistant/issues",
+  "Description": "Find and fix images missing alt text in Umbraco. A Media section dashboard lists every image with no alt text and lets editors add it inline, with one-click AI suggestions (Anthropic Claude, OpenAI, or Google Gemini vision) and bulk-suggest across the page. Bring your own API key. Works on Umbraco Cloud and all hosting environments.",
+  "LicenseTypes": [ "Free" ],
+  "PackageType": "Package",
+  "Screenshots": [
+    {
+      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-dashboard.jpg",
+      "Caption": "Media section dashboard listing every image missing alt text"
+    },
+    {
+      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-suggest.jpg",
+      "Caption": "Inline editor with image preview and one-click AI suggestion"
+    },
+    {
+      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-bulk.jpg",
+      "Caption": "Bulk suggest across the current page, review, then save all"
+    }
+  ],
+  "Tags": [ "Accessibility", "Alt Text", "AI", "SEO", "Media", "Editor Tools" ],
+  "Title": "Alt Text Assistant",
+  "VersionDependencyMode": "SemVer"
+}

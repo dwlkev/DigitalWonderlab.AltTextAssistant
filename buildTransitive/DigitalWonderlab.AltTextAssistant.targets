@@ -1,0 +1,26 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+	<PropertyGroup>
+		<AltTextAssistantContentFilesPath>$(MSBuildThisFileDirectory)..\content\App_Plugins\AltTextAssistant\**\*</AltTextAssistantContentFilesPath>
+	</PropertyGroup>
+
+	<Target Name="CopyAltTextAssistantAssets" BeforeTargets="Build">
+		<ItemGroup>
+			<AltTextAssistantContentFiles Include="$(AltTextAssistantContentFilesPath)" />
+		</ItemGroup>
+		<Message Text="Copying AltTextAssistant files: $(AltTextAssistantContentFilesPath) - #@(AltTextAssistantContentFiles->Count()) files" Importance="high" />
+		<Copy
+		  SourceFiles="@(AltTextAssistantContentFiles)"
+		  DestinationFiles="@(AltTextAssistantContentFiles->'$(MSBuildProjectDirectory)\App_Plugins\AltTextAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
+		  SkipUnchangedFiles="true" />
+	</Target>
+
+	<Target Name="ClearAltTextAssistantAssets" BeforeTargets="Clean">
+		<ItemGroup>
+			<AltTextAssistantDir Include="$(MSBuildProjectDirectory)\App_Plugins\AltTextAssistant\" />
+		</ItemGroup>
+		<Message Text="Clear old AltTextAssistant data" Importance="high" />
+		<RemoveDir Directories="@(AltTextAssistantDir)" />
+	</Target>
+
+</Project>
