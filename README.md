@@ -2,6 +2,12 @@
 
 An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to the Media section. It lists every image in the media library that has no alt text, lets editors add alt text inline, and — when an AI provider is configured — suggests alt text from the image with a single click, or in bulk across the whole page.
 
+![Media section dashboard listing every image missing alt text](screenshots/alt-text-assistant-dashboard.png)
+
+![Inline editor with image preview and one-click AI suggestion](screenshots/alt-text-assistant-suggest.png)
+
+![Bulk suggest across the current page, review, then save all](screenshots/alt-text-assistant-bulk.png)
+
 ## Features
 
 - **Media section dashboard** listing all images with no alt text, newest first, paged
