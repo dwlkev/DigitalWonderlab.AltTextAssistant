@@ -19,15 +19,15 @@
   "PackageType": "Package",
   "Screenshots": [
     {
-      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-dashboard.jpg",
+      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-dashboard.png",
       "Caption": "Media section dashboard listing every image missing alt text"
     },
     {
-      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-suggest.jpg",
+      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-suggest.png",
       "Caption": "Inline editor with image preview and one-click AI suggestion"
     },
     {
-      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-bulk.jpg",
+      "ImageUrl": "https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-bulk.png",
       "Caption": "Bulk suggest across the current page, review, then save all"
     }
   ],

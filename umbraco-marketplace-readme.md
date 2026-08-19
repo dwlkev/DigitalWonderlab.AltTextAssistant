@@ -2,9 +2,9 @@
 
 An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to the Media section. It surfaces every image with no alt text, lets editors fix it inline, and — when an AI provider is configured — suggests alt text straight from the image, one at a time or in bulk.
 
-![Dashboard](https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-dashboard.jpg)
+![Dashboard](https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-dashboard.png)
 
-![AI suggestion](https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-suggest.jpg)
+![AI suggestion](https://raw.githubusercontent.com/dwlkev/DigitalWonderlab.AltTextAssistant/main/screenshots/alt-text-assistant-suggest.png)
 
 ## Features
 - Media section dashboard listing all images with an empty alt text, newest first, paged
