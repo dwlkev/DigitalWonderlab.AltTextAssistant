@@ -61,6 +61,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
     }
 
     #bindEvents() {
+        this.#wireSettings();
         this.shadowRoot.getElementById("alt-refresh-btn")?.addEventListener("click", () => {
             this.#currentPage = 1;
             this.#loadImages();
@@ -533,11 +534,65 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         });
     }
 
+    /** Images | Settings switch and the anonymous telemetry toggle + preview. */
+    #wireSettings() {
+        const root = this.shadowRoot;
+        const wrapper = root.querySelector(".alt-wrapper");
+        const toggle = root.getElementById("dwl-telemetry-enabled");
+        const status = root.getElementById("dwl-telemetry-status");
+        const preview = root.getElementById("dwl-telemetry-preview");
+        const box = root.getElementById("dwl-telemetry-preview-box");
+        if (!wrapper || !toggle) return;
+        const api = async (path, init = {}) => fetch(`${AltTextAssistantDashboard.API_BASE}/${path}`, { ...init, headers: await this.#getAuthHeaders() });
+
+        const loadPreview = async () => {
+            try {
+                const r = await api("telemetry/preview");
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const d = await r.json();
+                const state = !d.enabled ? "Telemetry is off, so nothing is sent."
+                    : !d.environmentAllowed ? "This is a Development environment, so nothing is sent."
+                    : `Sent once a day to ${d.endpoint}`;
+                preview.textContent = `${state}\n\n${JSON.stringify(d.payload, null, 2)}`;
+            } catch (e) {
+                preview.textContent = `Could not load the preview (${e.message}).`;
+            }
+        };
+        const loadToggle = async () => {
+            try {
+                const r = await api("telemetry");
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                toggle.checked = (await r.json()).enabled !== false;
+                status.textContent = toggle.checked ? "Telemetry is on." : "Telemetry is off.";
+            } catch (e) {
+                status.textContent = `Could not load the setting (${e.message}).`;
+            }
+        };
+
+        root.querySelectorAll("uui-tab[data-dwl-view]").forEach((tab) => tab.addEventListener("click", () => {
+            const settings = tab.dataset.dwlView === "settings";
+            root.querySelectorAll("uui-tab[data-dwl-view]").forEach((t) => { t.active = t === tab; });
+            wrapper.classList.toggle("dwl-show-settings", settings);
+            if (settings) loadToggle();
+        }));
+        toggle.addEventListener("change", async () => {
+            try {
+                const r = await api("telemetry", { method: "POST", body: JSON.stringify({ enabled: toggle.checked }) });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                status.textContent = toggle.checked ? "Telemetry is on." : "Telemetry is off.";
+                if (box.open) loadPreview();
+            } catch (e) {
+                status.textContent = `Could not save (${e.message}).`;
+                toggle.checked = !toggle.checked;
+            }
+        });
+        box.addEventListener("toggle", () => { if (box.open) loadPreview(); });
+    }
+
     #escapeHtml(str) {
+        // Escapes quotes too: the result is also used inside src/data attributes.
         if (!str) return "";
-        const div = document.createElement("div");
-        div.textContent = str;
-        return div.innerHTML;
+        return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     }
 
     #escapeAttr(str) {

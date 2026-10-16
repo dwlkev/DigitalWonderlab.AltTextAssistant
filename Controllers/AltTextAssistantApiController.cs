@@ -1,19 +1,31 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using DigitalWonderlab.AltTextAssistant.Services;
+using DigitalWonderlab.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Umbraco.Cms.Api.Management.Controllers;
 using Umbraco.Cms.Api.Management.Routing;
+using Umbraco.Cms.Core;
+using Umbraco.Cms.Core.Cache;
 using Umbraco.Cms.Core.IO;
+using Umbraco.Cms.Core.Security;
+using Umbraco.Cms.Web.Common.Authorization;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Services;
 
 namespace DigitalWonderlab.AltTextAssistant.Controllers;
 
+// SECURITY (1.1.0): up to 1.0.0 any signed-in backoffice user could list every image and change any image's
+// alt text, regardless of Media section access or media start nodes. Now the Media section is required and
+// each item is checked against the user's media start nodes.
 [VersionedApiBackOfficeRoute("alt-text-assistant")]
 [ApiExplorerSettings(GroupName = "Alt Text Assistant")]
+[Authorize(Policy = AuthorizationPolicies.SectionAccessMedia)]
 public class AltTextAssistantApiController : ManagementApiControllerBase
 {
     private readonly IMediaService _mediaService;
@@ -22,6 +34,9 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AltTextAssistantApiController> _logger;
+    private readonly IBackOfficeSecurityAccessor _security;
+    private readonly IEntityService _entityService;
+    private readonly AppCaches _appCaches;
 
     // The default alt-text property alias on Umbraco's Image media type on DWL/baseline
     // sites. Not present on a stock Umbraco install, so it is overridable in config.
@@ -38,14 +53,29 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
         MediaFileManager mediaFileManager,
         IConfiguration configuration,
         IHttpClientFactory httpClientFactory,
-        ILogger<AltTextAssistantApiController> logger)
+        ILogger<AltTextAssistantApiController> logger,
+        IBackOfficeSecurityAccessor security,
+        IEntityService entityService,
+        AppCaches appCaches)
     {
+        _security = security;
+        _entityService = entityService;
+        _appCaches = appCaches;
         _mediaService = mediaService;
         _mediaTypeService = mediaTypeService;
         _mediaFileManager = mediaFileManager;
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+    }
+
+    /// <summary>True when the current backoffice user's media start nodes include this item.</summary>
+    private bool CanAccess(IMedia media)
+    {
+        var user = _security.BackOfficeSecurity?.CurrentUser;
+        if (user == null) return false;
+        var startIds = user.CalculateMediaStartNodeIds(_entityService, _appCaches);
+        return ContentPermissions.HasPathAccess(media.Path, startIds, Constants.System.RecycleBinMedia);
     }
 
     // The media property alias that holds alt text. Configurable so the package
@@ -80,7 +110,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
             foreach (var item in batch)
             {
                 var altText = item.GetValue<string>(alias);
-                if (string.IsNullOrWhiteSpace(altText))
+                if (string.IsNullOrWhiteSpace(altText) && CanAccess(item))
                     missingAlt.Add(item);
             }
 
@@ -128,6 +158,8 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
         var media = _mediaService.GetById(request.MediaId);
         if (media == null)
             return NotFound(new { error = "Media item not found." });
+        if (!CanAccess(media))
+            return Forbid();
 
         var alias = AltTextAlias;
         if (!MediaTypeHasAltField(media.ContentType.Alias, alias))
@@ -142,6 +174,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
 
         media.SetValue(alias, request.AltText.Trim());
         _mediaService.Save(media);
+        HttpContext.RequestServices.GetService<TelemetryCounters>()?.Increment(AltTextAssistantTelemetryContributor.Saves);
 
         return Ok(new { success = true });
     }
@@ -174,6 +207,10 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
         var media = _mediaService.GetById(request.MediaId);
         if (media == null)
             return NotFound(new { error = "Media item not found." });
+        if (!CanAccess(media))
+            return Forbid();
+
+        HttpContext.RequestServices.GetService<TelemetryCounters>()?.Increment(AltTextAssistantTelemetryContributor.Suggestions);
 
         try
         {
@@ -243,7 +280,9 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     // Provider resolution — first configured key wins
     // Priority: Anthropic > OpenAI > Google
     // ──────────────────────────────────────────────
-    private (string? provider, string? apiKey) GetActiveProvider()
+    internal (string? provider, string? apiKey) GetActiveProvider() => ActiveProvider(_configuration);
+
+    internal static (string? provider, string? apiKey) ActiveProvider(IConfiguration _configuration)
     {
         var anthropicKey = _configuration["AltTextAssistant:AnthropicApiKey"];
         if (!string.IsNullOrWhiteSpace(anthropicKey))
@@ -258,6 +297,39 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
             return ("Google", googleKey);
 
         return (null, null);
+    }
+
+    public record TelemetryToggleRequest(bool Enabled);
+
+    [HttpGet("telemetry")]
+    public IActionResult GetTelemetry()
+    {
+        var builder = HttpContext.RequestServices.GetRequiredService<TelemetryPayloadBuilder>();
+        return Ok(new { enabled = builder.IsProductToggleOn(AltTextAssistantTelemetryContributor.Product) });
+    }
+
+    [HttpPost("telemetry")]
+    public IActionResult SaveTelemetry([FromBody] TelemetryToggleRequest request)
+    {
+        var builder = HttpContext.RequestServices.GetRequiredService<TelemetryPayloadBuilder>();
+        builder.SetProductToggle(AltTextAssistantTelemetryContributor.Product, request.Enabled);
+        return Ok(new { enabled = request.Enabled });
+    }
+
+    /// <summary>The exact heartbeat this site would send next, shown on the dashboard's Settings tab.</summary>
+    [HttpGet("telemetry/preview")]
+    public IActionResult PreviewTelemetry()
+    {
+        var builder = HttpContext.RequestServices.GetRequiredService<TelemetryPayloadBuilder>();
+        var contributor = HttpContext.RequestServices.GetServices<ITelemetryContributor>()
+            .First(c => c.ProductId == AltTextAssistantTelemetryContributor.Product);
+        return Ok(new
+        {
+            endpoint = builder.Endpoint,
+            enabled = builder.GloballyEnabled && contributor.IsEnabled(),
+            environmentAllowed = builder.EnvironmentAllowed,
+            payload = builder.Build(contributor)
+        });
     }
 
     // ──────────────────────────────────────────────

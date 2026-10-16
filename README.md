@@ -106,7 +106,26 @@ All endpoints require an authenticated backoffice user.
 
 ## Privacy
 
-When you use AI suggestions, the image is sent to the AI provider you configured (Anthropic, OpenAI, or Google) using your own API key, under your own account and their terms. No data is sent anywhere unless you click Suggest, and nothing is sent if no key is configured.
+When you use AI suggestions, the image is sent to the AI provider you configured (Anthropic, OpenAI, or Google) using your own API key, under your own account and their terms. Images are only sent when you click Suggest, and never if no key is configured. Separately, the package sends Digital Wonderlab a small anonymous daily usage report with no images, alt text or keys in it; see Telemetry below to see exactly what it contains or turn it off.
+
+## Telemetry
+Once a day Alt Text Assistant sends Digital Wonderlab a small anonymous report so we know how many sites use it and
+on which versions. It is on by default and easy to turn off.
+
+- **Sent:** a random install ID (created on first run, stored in your Umbraco database, not derived from anything
+  about your site), the package, Umbraco and .NET versions, environment type, hosting type, database type, the image
+  library's rough size in bands such as `100-999`, which AI provider is configured (never the key), and how many
+  suggestions and saves were made in the last day (banded).
+- **Never sent:** API keys, images, alt text, file or media names, hostnames, URLs, user names, emails or IP addresses.
+- **See it / turn it off:** the dashboard's **Settings** tab shows exactly what is sent and has an on/off switch. Or set
+  `"AltTextAssistant": { "Telemetry": { "Enabled": false } }`, or `"DigitalWonderlab": { "Telemetry": { "Enabled": false } }`
+  for every Digital Wonderlab package.
+- Local development (`ASPNETCORE_ENVIRONMENT=Development`) never sends anything. Data is kept for 13 months.
+
+## Security (1.1.0)
+Up to 1.0.0 any signed-in backoffice user could list every image and change any image's alt text, even without access
+to the Media section or outside their media start nodes. 1.1.0 requires the Media section and checks each item
+against the user's media start nodes. Release builds also no longer embed the build machine's file path in the DLL.
 
 ## Issues / Suggestions
 

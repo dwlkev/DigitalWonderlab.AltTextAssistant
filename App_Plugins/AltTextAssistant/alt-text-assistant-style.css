@@ -337,3 +337,15 @@ uui-table-cell {
     font-size: 0.9rem;
     line-height: 1.4;
 }
+
+/* Hide rules are !important: the dashboards show results via inline style.display, which would win otherwise.
+   Images | Settings switch (1.1.0): uui-tab-group, styled by the backoffice. */
+.dwl-tabs { margin: 0 0 12px; border-bottom: 1px solid var(--uui-color-border, #d8d7d9); }
+.dwl-settings { display: none; }
+.alt-wrapper.dwl-show-settings > :not(.dwl-tabs):not(.dwl-settings) { display: none !important; }
+.alt-wrapper.dwl-show-settings .dwl-settings { display: block; }
+.dwl-settings p { max-width: 720px; }
+.dwl-settings uui-toggle { display: block; margin: 12px 0 4px; }
+#dwl-telemetry-status { color: var(--uui-color-text-alt, #68676b); font-size: 13px; }
+.dwl-settings summary { cursor: pointer; margin-top: 16px; }
+.dwl-settings pre { white-space: pre-wrap; font-size: 12px; background: var(--uui-color-surface-alt, #f3f3f5); padding: 10px; border-radius: var(--uui-border-radius, 4px); max-height: 360px; overflow: auto; }

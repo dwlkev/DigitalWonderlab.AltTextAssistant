@@ -1,3 +1,8 @@
+<div class="alt-wrapper">
+<uui-tab-group class="dwl-tabs">
+    <uui-tab label="Images" data-dwl-view="main" active>Images</uui-tab>
+    <uui-tab label="Settings" data-dwl-view="settings">Settings</uui-tab>
+</uui-tab-group>
 <div class="dashboard-header">
     <h2>Alt Text Assistant</h2>
     <div class="header-actions">
@@ -72,4 +77,22 @@
             <uui-button id="alt-modal-save" look="primary" color="positive" label="Save">Save</uui-button>
         </div>
     </div>
+</div>
+
+<uui-box class="dwl-settings" headline="Anonymous telemetry">
+    <p>
+        Once a day this site sends Digital Wonderlab a small anonymous report so we can see how many sites use Alt
+        Text Assistant and on which versions: a random install ID, the package, Umbraco and .NET versions, hosting
+        type, the image library's rough size in bands (for example "100-999 images"), which AI provider is
+        configured (never the key) and how many suggestions and saves were made. No hostnames, URLs, image names,
+        alt text, content or emails are sent. It can also be turned off in config with
+        <code>AltTextAssistant:Telemetry:Enabled = false</code>.
+    </p>
+    <uui-toggle id="dwl-telemetry-enabled" label="Send anonymous telemetry"></uui-toggle>
+    <div id="dwl-telemetry-status"></div>
+    <details id="dwl-telemetry-preview-box">
+        <summary>Show exactly what is sent</summary>
+        <pre id="dwl-telemetry-preview">Loading...</pre>
+    </details>
+</uui-box>
 </div>

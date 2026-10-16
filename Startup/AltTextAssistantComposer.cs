@@ -1,3 +1,5 @@
+using DigitalWonderlab.AltTextAssistant.Services;
+using DigitalWonderlab.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Umbraco.Cms.Core.Composing;
 using Umbraco.Cms.Core.DependencyInjection;
@@ -10,5 +12,8 @@ public class AltTextAssistantComposer : IComposer
     {
         // The controller resolves IHttpClientFactory to call the configured AI provider.
         builder.Services.AddHttpClient();
+
+        // Anonymous daily telemetry heartbeat (see README Telemetry).
+        builder.Services.AddDwlTelemetryProduct<AltTextAssistantTelemetryContributor>();
     }
 }
