@@ -25,10 +25,10 @@ An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to t
 - To enable AI, add a provider API key under a `AltTextAssistant` section in `appsettings.json` (Anthropic → OpenAI → Google priority). See the GitHub README for the config block.
 
 ## Privacy
-When you use AI suggestions, the image is sent to the provider you configured, using your own API key under your own account and their terms. Images are only sent when you click Suggest, and never if no key is configured. Separately, the package sends Digital Wonderlab a small anonymous daily usage report with no images, alt text or keys in it (see Telemetry).
+When you use AI suggestions, the image is sent to the provider you configured, using your own API key under your own account and their terms. Images are only sent when you click Suggest, and never if no key is configured. Separately, the package sends us a small anonymous daily usage report with no images, alt text or keys in it (see Telemetry).
 
 ## Telemetry
-Once a day Alt Text Assistant sends Digital Wonderlab a small anonymous report so we know how many sites use it and
+Once a day Alt Text Assistant sends us a small anonymous report so we know how many sites use it and
 on which versions. It is on by default and easy to turn off.
 
 - **Sent:** a random install ID (created on first run, stored in your Umbraco database, not derived from anything
