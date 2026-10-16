@@ -25,21 +25,7 @@ An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to t
 - To enable AI, add a provider API key under a `AltTextAssistant` section in `appsettings.json` (Anthropic → OpenAI → Google priority). See the GitHub README for the config block.
 
 ## Privacy
-When you use AI suggestions, the image is sent to the provider you configured, using your own API key under your own account and their terms. Images are only sent when you click Suggest, and never if no key is configured. Separately, the package sends us a small anonymous daily usage report with no images, alt text or keys in it (see Telemetry).
-
-## Telemetry
-Once a day Alt Text Assistant sends us a small anonymous report so we know how many sites use it and
-on which versions. It is on by default and easy to turn off.
-
-- **Sent:** a random install ID (created on first run, stored in your Umbraco database, not derived from anything
-  about your site), the package, Umbraco and .NET versions, environment type, hosting type, database type, the image
-  library's rough size in bands such as `100-999`, which AI provider is configured (never the key), and how many
-  suggestions and saves were made in the last day (banded).
-- **Never sent:** API keys, images, alt text, file or media names, hostnames, URLs, user names, emails or IP addresses.
-- **See it / turn it off:** the dashboard's **Settings** tab shows exactly what is sent and has an on/off switch. Or set
-  `"AltTextAssistant": { "Telemetry": { "Enabled": false } }`, or `"DigitalWonderlab": { "Telemetry": { "Enabled": false } }`
-  for every Digital Wonderlab package.
-- Local development (`ASPNETCORE_ENVIRONMENT=Development`) never sends anything. Data is kept for 13 months.
+When you use AI suggestions, the image is sent to the provider you configured, using your own API key under your own account and their terms. Images are only sent when you click Suggest, and never if no key is configured.
 
 ## Issues / Suggestions
 - Please use the GitHub issue tracker: https://github.com/dwlkev/DigitalWonderlab.AltTextAssistant/issues
