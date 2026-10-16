@@ -41,10 +41,5 @@ on which versions. It is on by default and easy to turn off.
   for every Digital Wonderlab package.
 - Local development (`ASPNETCORE_ENVIRONMENT=Development`) never sends anything. Data is kept for 13 months.
 
-## Security (1.1.0)
-Up to 1.0.0 any signed-in backoffice user could list every image and change any image's alt text, even without access
-to the Media section or outside their media start nodes. 1.1.0 requires the Media section and checks each item
-against the user's media start nodes. Release builds also no longer embed the build machine's file path in the DLL.
-
 ## Issues / Suggestions
 - Please use the GitHub issue tracker: https://github.com/dwlkev/DigitalWonderlab.AltTextAssistant/issues

@@ -7,7 +7,7 @@
 		<!-- NuGet metadata -->
 		<IsPackable>true</IsPackable>
 		<PackageId>DigitalWonderlab.AltTextAssistant</PackageId>
-		<Version>1.1.0</Version>
+		<Version>1.1.1</Version>
 		<Authors>Digital Wonderlab</Authors>
 		<Company>Digital Wonderlab</Company>
 		<Description>Find and fix images missing alt text in Umbraco 17+. Adds a Media section dashboard that lists every image with no alt text, with one-click AI suggestions (Anthropic Claude, OpenAI, or Google Gemini vision) and bulk-suggest across the page. Bring your own API key. Works on Umbraco Cloud and all hosting environments.</Description>
