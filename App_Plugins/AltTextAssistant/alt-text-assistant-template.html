@@ -1,6 +1,7 @@
 <div class="alt-wrapper">
 <uui-tab-group class="dwl-tabs">
-    <uui-tab label="Images" data-dwl-view="main" active>Images</uui-tab>
+    <uui-tab label="Missing alt text" data-dwl-view="main" active>Missing alt text</uui-tab>
+    <uui-tab label="Needs improving" data-dwl-view="weak">Needs improving</uui-tab>
     <uui-tab label="Settings" data-dwl-view="settings">Settings</uui-tab>
 </uui-tab-group>
 <div class="dashboard-header">
@@ -12,6 +13,11 @@
         <uui-button id="alt-refresh-btn" look="secondary" label="Refresh">Refresh</uui-button>
     </div>
 </div>
+
+<p id="alt-weak-intro" class="weak-intro" style="display:none;">
+    Images whose alt text is set but does not describe the image: file names, camera names, placeholder words,
+    "image of...", very long text, or the same text on several images. Review each AI improvement before saving.
+</p>
 
 <div id="alt-field-warning" class="field-warning" style="display:none;">
     <strong>No alt text field found.</strong>
@@ -42,15 +48,15 @@
 
 <div id="alt-empty" class="empty-state">
     <div class="empty-state-icon">&#10003;</div>
-    <h3>All images have alt text</h3>
-    <p>Great job! Every image in the media library has alt text set.</p>
+    <h3 id="alt-empty-title">All images have alt text</h3>
+    <p id="alt-empty-msg">Great job! Every image in the media library has alt text set.</p>
 </div>
 
 <div id="alt-table-wrap" class="table-container" style="display:none;">
     <uui-table id="alt-table" aria-label="Images missing alt text">
         <uui-table-head>
             <uui-table-head-cell style="width:80px;">Thumbnail</uui-table-head-cell>
-            <uui-table-head-cell>Name</uui-table-head-cell>
+            <uui-table-head-cell id="alt-name-head">Name</uui-table-head-cell>
             <uui-table-head-cell style="width:110px;">Created</uui-table-head-cell>
             <uui-table-head-cell class="suggestion-cell" style="width:250px;">Suggested Alt Text</uui-table-head-cell>
             <uui-table-head-cell style="width:296px;">Actions</uui-table-head-cell>

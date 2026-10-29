@@ -12,6 +12,7 @@ An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to t
 - One-click **Suggest with AI** — a concise, screen-reader- and SEO-friendly description generated from the image
 - **Bulk suggest** across the current page (throttled, cancellable), review, then Save All
 - **Suggest + save all** for every image missing alt text across the whole library, with progress and a Stop button
+- **Needs improving**: finds alt text that is set but unhelpful (file names, camera names, placeholder words, "image of...", duplicates) and rewrites it with AI, with a review step
 - **Works with any image format**, including WebP, with very large images resized automatically
 - Bring your own key: Anthropic Claude, OpenAI, or Google Gemini vision
 - Works fully for manual entry with no key configured — AI controls simply hide

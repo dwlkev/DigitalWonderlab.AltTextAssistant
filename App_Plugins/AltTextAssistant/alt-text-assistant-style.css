@@ -398,3 +398,34 @@ uui-table-cell {
 #dwl-telemetry-status { color: var(--uui-color-text-alt, #68676b); font-size: 13px; }
 .dwl-settings summary { cursor: pointer; margin-top: 16px; }
 .dwl-settings pre { white-space: pre-wrap; font-size: 12px; background: var(--uui-color-surface-alt, #f3f3f5); padding: 10px; border-radius: var(--uui-border-radius, 4px); max-height: 360px; overflow: auto; }
+
+/* Needs improving (1.3.0) */
+.weak-intro {
+    margin: 0 0 16px;
+    color: var(--uui-color-text-alt, #515054);
+    max-width: 900px;
+}
+
+.current-alt {
+    display: block;
+    margin-top: 4px;
+    font-style: italic;
+    color: var(--uui-color-text-alt, #515054);
+    word-break: break-word;
+}
+
+.reason-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.reason {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    background: var(--uui-color-warning-standalone, #fbd142);
+    color: var(--uui-color-warning-contrast, #000);
+}

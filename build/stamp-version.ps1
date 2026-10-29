@@ -12,6 +12,8 @@ foreach ($f in $files) {
         $content = $content.Replace("?v=$Version", '?v=PACKAGE_VERSION')
     } else {
         $content = $content.Replace('PACKAGE_VERSION', $Version)
+        # The backoffice "Installed packages" list reads the manifest's own version field.
+        $content = $content -replace '("name":\s*"AltTextAssistant",\s*"version":\s*)"[^"]*"', "`$1`"$Version`""
     }
     Set-Content $f $content -NoNewline
 }

@@ -15,6 +15,8 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
     #bulkActive = false;
     #bulkAbort = null;
     #allAbort = null;
+    // "missing" = images with no alt text; "weak" = alt text set but not descriptive (1.3.0).
+    #mode = "missing";
 
     static API_BASE = "/umbraco/management/api/v1/alt-text-assistant";
 
@@ -143,22 +145,46 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
             }
         }
 
-        const suggestBtn = this.shadowRoot.getElementById("alt-modal-suggest");
-        const aiNotice = this.shadowRoot.getElementById("alt-ai-notice");
-        const bulkBtn = this.shadowRoot.getElementById("alt-bulk-suggest-btn");
-        const allBtn = this.shadowRoot.getElementById("alt-all-btn");
+        this.#applyModeUi();
+    }
 
-        if (this.#aiEnabled) {
-            if (suggestBtn) suggestBtn.style.display = "";
-            if (aiNotice) aiNotice.style.display = "none";
-            if (bulkBtn) bulkBtn.style.display = "";
-            if (allBtn) allBtn.style.display = "";
-        } else {
-            if (suggestBtn) suggestBtn.style.display = "none";
-            if (aiNotice) aiNotice.style.display = "";
-            if (bulkBtn) bulkBtn.style.display = "none";
-            if (allBtn) allBtn.style.display = "none";
-        }
+    /** Labels and buttons for the current list: missing alt text, or alt text that needs improving. */
+    #applyModeUi() {
+        const root = this.shadowRoot;
+        const weak = this.#mode === "weak";
+        const set = (id, fn) => { const el = root.getElementById(id); if (el) fn(el); };
+
+        set("alt-modal-suggest", (el) => {
+            el.style.display = this.#aiEnabled ? "" : "none";
+            el.textContent = weak ? "Improve with AI" : "Suggest with AI";
+            el.label = el.textContent;
+        });
+        set("alt-ai-notice", (el) => { el.style.display = this.#aiEnabled ? "none" : ""; });
+        set("alt-bulk-suggest-btn", (el) => {
+            el.style.display = this.#aiEnabled ? "" : "none";
+            el.innerHTML = weak ? "Improve this page &#10024;" : "Bulk Suggest this page &#10024;";
+            el.label = weak ? "Improve this page with AI" : "Bulk Suggest this page with AI";
+        });
+        // Improvements always get a review step, so there is no "save all" for them.
+        set("alt-all-btn", (el) => { el.style.display = this.#aiEnabled && !weak ? "" : "none"; });
+        set("alt-weak-intro", (el) => { el.style.display = weak ? "" : "none"; });
+        set("alt-name-head", (el) => { el.textContent = weak ? "Name and current alt text" : "Name"; });
+        set("alt-empty-title", (el) => { el.textContent = weak ? "No alt text needs improving" : "All images have alt text"; });
+        set("alt-empty-msg", (el) => {
+            el.textContent = weak
+                ? "None of the alt text in the media library matched a file name, placeholder or other weak pattern."
+                : "Great job! Every image in the media library has alt text set.";
+        });
+        set("alt-table", (el) => el.setAttribute("aria-label", weak ? "Images whose alt text needs improving" : "Images missing alt text"));
+    }
+
+    #setMode(mode) {
+        if (this.#mode === mode) return;
+        if (this.#bulkActive) this.#cancelBulkSuggest();
+        this.#mode = mode;
+        this.#currentPage = 1;
+        this.#applyModeUi();
+        this.#loadImages();
     }
 
     async #loadImages() {
@@ -174,7 +200,8 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
 
         try {
             const headers = await this.#getAuthHeaders();
-            const url = `${AltTextAssistantDashboard.API_BASE}/images?page=${this.#currentPage}&pageSize=${this.#pageSize}`;
+            const list = this.#mode === "weak" ? "images/weak" : "images";
+            const url = `${AltTextAssistantDashboard.API_BASE}/${list}?page=${this.#currentPage}&pageSize=${this.#pageSize}`;
             const response = await fetch(url, { headers });
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -208,11 +235,13 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         // Remove existing rows but keep the head
         table.querySelectorAll("uui-table-row").forEach((r) => r.remove());
 
+        const weak = this.#mode === "weak";
         const openModal = (el) => {
             this.#openModal(
                 parseInt(el.dataset.id, 10),
                 el.dataset.name,
-                el.dataset.src
+                el.dataset.src,
+                el.dataset.alt || ""
             );
         };
 
@@ -221,15 +250,21 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
             row.dataset.mediaId = item.id;
 
             const thumbSrc = item.src || "";
+            const altAttr = weak ? ` data-alt="${this.#escapeAttr(item.altText || "")}"` : "";
+            const details = weak
+                ? `<span class="current-alt">"${this.#escapeHtml(item.altText)}"</span>` +
+                  `<span class="reason-list">${(item.reasons || []).map((r) => `<span class="reason">${this.#escapeHtml(r)}</span>`).join("")}</span>`
+                : "";
+            const actionLabel = weak ? "Improve" : "Add Alt Text";
 
             row.innerHTML = `
-                <uui-table-cell><img class="thumb js-thumb-click" src="${this.#escapeHtml(thumbSrc)}" alt="" loading="lazy" data-id="${item.id}" data-name="${this.#escapeAttr(item.name)}" data-src="${this.#escapeAttr(item.src || "")}" /></uui-table-cell>
-                <uui-table-cell><span class="media-name">${this.#escapeHtml(item.name)}</span></uui-table-cell>
+                <uui-table-cell><img class="thumb js-thumb-click" src="${this.#escapeHtml(thumbSrc)}" alt="" loading="lazy" data-id="${item.id}" data-name="${this.#escapeAttr(item.name)}" data-src="${this.#escapeAttr(item.src || "")}"${altAttr} /></uui-table-cell>
+                <uui-table-cell><span class="media-name">${this.#escapeHtml(item.name)}</span>${details}</uui-table-cell>
                 <uui-table-cell>${this.#escapeHtml(item.createDate)}</uui-table-cell>
                 <uui-table-cell class="suggestion-cell"></uui-table-cell>
                 <uui-table-cell>
                     <div class="actions-cell">
-                        <uui-button class="js-add-alt" look="primary" color="positive" label="Add Alt Text" data-id="${item.id}" data-name="${this.#escapeAttr(item.name)}" data-src="${this.#escapeAttr(item.src || "")}">Add Alt Text</uui-button>
+                        <uui-button class="js-add-alt" look="primary" color="positive" label="${actionLabel}" data-id="${item.id}" data-name="${this.#escapeAttr(item.name)}" data-src="${this.#escapeAttr(item.src || "")}"${altAttr}>${actionLabel}</uui-button>
                         <uui-button look="secondary" label="Edit in Media" href="/umbraco/section/media/workspace/media/edit/${item.key}" target="_blank">Edit in Media</uui-button>
                     </div>
                 </uui-table-cell>
@@ -258,24 +293,24 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
     #updateBadge(count) {
         const badge = this.shadowRoot.getElementById("alt-count-badge");
         if (count > 0) {
-            badge.textContent = `${count} missing`;
+            badge.textContent = this.#mode === "weak" ? `${count} to improve` : `${count} missing`;
             badge.style.display = "inline-block";
         } else {
             badge.style.display = "none";
         }
     }
 
-    #openModal(mediaId, name, src) {
+    #openModal(mediaId, name, src, currentAlt = "") {
         this.#editingMediaId = mediaId;
         const modal = this.shadowRoot.getElementById("alt-modal");
         const preview = this.shadowRoot.getElementById("alt-modal-preview");
         const input = this.shadowRoot.getElementById("alt-modal-input");
         const title = this.shadowRoot.getElementById("alt-modal-title");
 
-        title.textContent = `Add Alt Text — ${name}`;
+        title.textContent = `${this.#mode === "weak" ? "Improve Alt Text" : "Add Alt Text"}: ${name}`;
         preview.src = src || "";
         preview.style.display = src ? "block" : "none";
-        input.value = "";
+        input.value = currentAlt;
         modal.classList.add("active");
 
         requestAnimationFrame(() => input.focus());
@@ -299,7 +334,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
             const response = await fetch(`${AltTextAssistantDashboard.API_BASE}/suggest`, {
                 method: "POST",
                 headers,
-                body: JSON.stringify({ mediaId: this.#editingMediaId }),
+                body: JSON.stringify({ mediaId: this.#editingMediaId, improve: this.#mode === "weak" }),
             });
 
             if (!response.ok) {
@@ -319,7 +354,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
             }
         } finally {
             suggestBtn.disabled = false;
-            suggestBtn.textContent = "Suggest with AI";
+            suggestBtn.textContent = this.#mode === "weak" ? "Improve with AI" : "Suggest with AI";
         }
     }
 
@@ -421,7 +456,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
                     const response = await fetch(`${AltTextAssistantDashboard.API_BASE}/suggest`, {
                         method: "POST",
                         headers,
-                        body: JSON.stringify({ mediaId }),
+                        body: JSON.stringify({ mediaId, improve: this.#mode === "weak" }),
                         signal: this.#bulkAbort.signal,
                     });
 
@@ -700,10 +735,12 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         };
 
         root.querySelectorAll("uui-tab[data-dwl-view]").forEach((tab) => tab.addEventListener("click", () => {
-            const settings = tab.dataset.dwlView === "settings";
+            const view = tab.dataset.dwlView;
+            const settings = view === "settings";
             root.querySelectorAll("uui-tab[data-dwl-view]").forEach((t) => { t.active = t === tab; });
             wrapper.classList.toggle("dwl-show-settings", settings);
             if (settings) loadToggle();
+            else this.#setMode(view === "weak" ? "weak" : "missing");
         }));
         toggle.addEventListener("change", async () => {
             try {

@@ -20,6 +20,9 @@ An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to t
 - **Graceful without AI** — with no key configured the dashboard still works for manual alt text; AI controls are hidden
 - **Works with any Image media type** — the alt-text property alias is configurable, and the dashboard warns clearly if no alt-text field exists
 - **Edit in Media** shortcut to jump to the full media item
+- **Needs improving**: a second list of images whose alt text is set but not useful (the file name, a camera name like IMG_1234, a placeholder word such as "image" or "logo", "image of...", very long text, or the same text on several images), each with the reason it was flagged
+- **Improve with AI**: rewrites weak alt text using the image and its current text, one at a time or a page at a time, always with a review step before saving
+- **Logo-aware**: logos get the organisation name plus "logo" rather than a description of the artwork
 - Missing-count badge so you can see progress at a glance
 
 ## Compatibility
@@ -100,6 +103,7 @@ Without any key configured the AI buttons are hidden and the dashboard works for
 ## How it works
 
 - `GET /umbraco/management/api/v1/alt-text-assistant/images` — pages the media library for images with no alt text
+- `GET /umbraco/management/api/v1/alt-text-assistant/images/weak` pages images whose alt text needs improving, with the reasons
 - `POST /umbraco/management/api/v1/alt-text-assistant/save` — writes the alt-text property back to a media item
 - `POST /umbraco/management/api/v1/alt-text-assistant/suggest` — reads the image and calls the configured AI provider
 - `GET /umbraco/management/api/v1/alt-text-assistant/config` — reports whether AI is enabled, the alt-text alias, and whether that field exists

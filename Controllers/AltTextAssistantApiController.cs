@@ -44,8 +44,23 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
 
     private const string AltTextPrompt =
         "Write a concise, descriptive alt text for this image suitable for a website. " +
-        "The alt text should be 1-2 sentences that describe what is shown in the image " +
-        "for screen reader users and SEO. Return only the alt text, nothing else.";
+        "The alt text should be 1-2 sentences (under 125 characters where possible) that describe what is " +
+        "shown in the image for screen reader users and SEO. Do not start with \"Image of\" or \"Picture of\". " +
+        "If the image is a logo, return only the organisation or brand name followed by the word logo, " +
+        "for example \"Northfield Trust logo\". Return only the alt text, nothing else.";
+
+    /// <summary>The prompt for one image: names it, and when improving, shows the alt text being replaced.</summary>
+    internal static string BuildPrompt(string? mediaName, string? currentAlt)
+    {
+        var prompt = AltTextPrompt;
+        if (!string.IsNullOrWhiteSpace(mediaName))
+            prompt += $"\n\nThe image is named \"{mediaName.Trim()}\" in the media library. Use the name only if it " +
+                      "helps identify a brand, person or place; ignore it if it looks like a file or camera name.";
+        if (!string.IsNullOrWhiteSpace(currentAlt))
+            prompt += $"\n\nIts current alt text is \"{currentAlt.Trim()}\", which has been flagged as not descriptive " +
+                      "enough. Write a better replacement. Keep any correct names from it.";
+        return prompt;
+    }
 
     public AltTextAssistantApiController(
         IMediaService mediaService,
@@ -136,15 +151,73 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
         return Ok(missingAlt.Select(img => new { id = img.Id, name = img.Name }));
     }
 
+    /// <summary>Images whose alt text exists but does not describe the image, worst first, with the reasons.</summary>
+    [HttpGet("images/weak")]
+    public IActionResult GetWeakImages(int page = 1, int pageSize = 25)
+    {
+        var images = GetAccessibleImages();
+        if (images == null)
+            return NotFound(new { error = "Image media type not found." });
+
+        var alias = AltTextAlias;
+        var withAlt = images
+            .Select(img => (img, alt: img.GetValue<string>(alias)?.Trim() ?? ""))
+            .Where(x => x.alt.Length > 0)
+            .ToList();
+
+        // How many images share each alt text, for the "same alt on N images" rule.
+        var usage = withAlt
+            .GroupBy(x => AltTextQuality.Normalise(x.alt))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var weak = withAlt
+            .Select(x =>
+            {
+                var src = ParseImageSrc(x.img.GetValue<string>("umbracoFile"));
+                var fileName = src.Split('?')[0].Split('/').LastOrDefault();
+                var reasons = AltTextQuality.Problems(x.alt, x.img.Name, fileName, usage[AltTextQuality.Normalise(x.alt)]);
+                return (x.img, x.alt, src, reasons);
+            })
+            .Where(x => x.reasons.Count > 0)
+            .OrderByDescending(x => x.reasons.Count)
+            .ThenByDescending(x => x.img.CreateDate)
+            .ToList();
+
+        var totalPages = (int)Math.Ceiling((double)weak.Count / pageSize);
+        var items = weak.Skip((page - 1) * pageSize).Take(pageSize).Select(x => new
+        {
+            id = x.img.Id,
+            key = x.img.Key,
+            name = x.img.Name,
+            createDate = x.img.CreateDate.ToString("yyyy-MM-dd"),
+            src = x.src,
+            altText = x.alt,
+            reasons = x.reasons
+        });
+
+        return Ok(new { items, totalItems = weak.Count, page, pageSize, totalPages });
+    }
+
     /// <summary>Images the current user can access with no alt text, newest first. Null if there is no Image type.</summary>
     private List<IMedia>? GetMissingAltImages()
+    {
+        var alias = AltTextAlias;
+        var missingAlt = GetAccessibleImages()?
+            .Where(item => string.IsNullOrWhiteSpace(item.GetValue<string>(alias)))
+            .ToList();
+
+        missingAlt?.Sort((a, b) => b.CreateDate.CompareTo(a.CreateDate));
+        return missingAlt;
+    }
+
+    /// <summary>Every Image the current user can access. Null if there is no Image type.</summary>
+    private List<IMedia>? GetAccessibleImages()
     {
         var imageType = _mediaTypeService.Get("Image");
         if (imageType == null)
             return null;
 
-        var alias = AltTextAlias;
-        var missingAlt = new List<IMedia>();
+        var images = new List<IMedia>();
         var batchIndex = 0;
         const int batchSize = 500;
         long totalMediaCount;
@@ -154,19 +227,12 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
             var batch = _mediaService.GetPagedOfType(
                 imageType.Id, batchIndex, batchSize, out totalMediaCount);
 
-            foreach (var item in batch)
-            {
-                var altText = item.GetValue<string>(alias);
-                if (string.IsNullOrWhiteSpace(altText) && CanAccess(item))
-                    missingAlt.Add(item);
-            }
-
+            images.AddRange(batch.Where(CanAccess));
             batchIndex++;
         }
         while ((long)batchIndex * batchSize < totalMediaCount);
 
-        missingAlt.Sort((a, b) => b.CreateDate.CompareTo(a.CreateDate));
-        return missingAlt;
+        return images;
     }
 
     [HttpPost("save")]
@@ -269,13 +335,14 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
                 imageBytes.Length, prepared.Bytes.Length, mimeType, prepared.Reencoded, provider);
 
             var base64 = Convert.ToBase64String(prepared.Bytes);
+            var prompt = BuildPrompt(media.Name, request.Improve ? media.GetValue<string>(AltTextAlias) : null);
 
             // Dispatch to the active provider
             return provider switch
             {
-                "Anthropic" => await CallAnthropic(apiKey!, base64, mimeType),
-                "OpenAI" => await CallOpenAI(apiKey!, base64, mimeType),
-                "Google" => await CallGemini(apiKey!, base64, mimeType),
+                "Anthropic" => await CallAnthropic(apiKey!, base64, mimeType, prompt),
+                "OpenAI" => await CallOpenAI(apiKey!, base64, mimeType, prompt),
+                "Google" => await CallGemini(apiKey!, base64, mimeType, prompt),
                 _ => BadRequest(new { error = $"Unknown provider: {provider}" })
             };
         }
@@ -359,7 +426,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     // Anthropic Claude — Messages API with vision
     // Docs: https://docs.anthropic.com/en/docs/build-with-claude/vision
     // ──────────────────────────────────────────────
-    private async Task<IActionResult> CallAnthropic(string apiKey, string base64, string mimeType)
+    private async Task<IActionResult> CallAnthropic(string apiKey, string base64, string mimeType, string prompt)
     {
         var client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Add("x-api-key", apiKey);
@@ -388,7 +455,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
                                 data = base64
                             }
                         },
-                        new { type = "text", text = AltTextPrompt }
+                        new { type = "text", text = prompt }
                     }
                 }
             }
@@ -408,7 +475,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     // OpenAI — Chat Completions API with vision
     // Docs: https://platform.openai.com/docs/guides/vision
     // ──────────────────────────────────────────────
-    private async Task<IActionResult> CallOpenAI(string apiKey, string base64, string mimeType)
+    private async Task<IActionResult> CallOpenAI(string apiKey, string base64, string mimeType, string prompt)
     {
         var client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -434,7 +501,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
                                 url = $"data:{mimeType};base64,{base64}"
                             }
                         },
-                        new { type = "text", text = AltTextPrompt }
+                        new { type = "text", text = prompt }
                     }
                 }
             }
@@ -458,7 +525,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     // Google Gemini — GenerateContent API with inline image
     // Docs: https://ai.google.dev/gemini-api/docs/vision
     // ──────────────────────────────────────────────
-    private async Task<IActionResult> CallGemini(string apiKey, string base64, string mimeType)
+    private async Task<IActionResult> CallGemini(string apiKey, string base64, string mimeType, string prompt)
     {
         var client = _httpClientFactory.CreateClient();
 
@@ -480,7 +547,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
                                 data = base64
                             }
                         },
-                        new { text = AltTextPrompt }
+                        new { text = prompt }
                     }
                 }
             }
@@ -626,5 +693,8 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     public class SuggestAltTextRequest
     {
         public int MediaId { get; set; }
+
+        /// <summary>Rewrite the image's existing alt text rather than writing it from scratch.</summary>
+        public bool Improve { get; set; }
     }
 }
