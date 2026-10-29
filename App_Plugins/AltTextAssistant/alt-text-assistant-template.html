@@ -7,7 +7,8 @@
     <h2>Alt Text Assistant</h2>
     <div class="header-actions">
         <span id="alt-count-badge" class="count-badge" style="display:none;"></span>
-        <uui-button id="alt-bulk-suggest-btn" look="primary" color="default" label="Bulk Suggest with AI" style="display:none;">Bulk Suggest with AI &#10024;</uui-button>
+        <uui-button id="alt-bulk-suggest-btn" look="primary" color="default" label="Bulk Suggest this page with AI" style="display:none;">Bulk Suggest this page &#10024;</uui-button>
+        <uui-button id="alt-all-btn" look="outline" color="default" label="Suggest and save all with AI" style="display:none;">Suggest + save all &#10024;</uui-button>
         <uui-button id="alt-refresh-btn" look="secondary" label="Refresh">Refresh</uui-button>
     </div>
 </div>
@@ -15,6 +16,18 @@
 <div id="alt-field-warning" class="field-warning" style="display:none;">
     <strong>No alt text field found.</strong>
     <span id="alt-field-warning-msg"></span>
+</div>
+
+<div id="alt-all-panel" class="all-panel" style="display:none;">
+    <div class="all-panel-row">
+        <span id="alt-all-progress" class="bulk-progress"></span>
+        <uui-button id="alt-all-stop" look="secondary" label="Stop">Stop</uui-button>
+    </div>
+    <div class="all-bar"><div id="alt-all-bar-fill" class="all-bar-fill"></div></div>
+    <details id="alt-all-failures-box" style="display:none;">
+        <summary id="alt-all-failures-summary"></summary>
+        <ul id="alt-all-failures" class="all-failures"></ul>
+    </details>
 </div>
 
 <div id="alt-loading" class="loading">

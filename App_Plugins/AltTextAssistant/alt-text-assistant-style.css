@@ -325,6 +325,55 @@ uui-table-cell {
     display: none;
 }
 
+/* "Suggest + save all" progress panel */
+.all-panel {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--uui-color-border, #e9e9eb);
+    border-radius: 6px;
+    background: var(--uui-color-surface-alt, #f3f3f5);
+}
+
+.all-panel-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.all-bar {
+    height: 6px;
+    margin-top: 10px;
+    border-radius: 3px;
+    background: var(--uui-color-border, #e9e9eb);
+    overflow: hidden;
+}
+
+.all-bar-fill {
+    height: 100%;
+    width: 0;
+    background: var(--uui-color-positive, #2bc37c);
+    transition: width 0.2s;
+}
+
+.all-panel details {
+    margin-top: 10px;
+    font-size: 0.85em;
+}
+
+.all-panel summary {
+    cursor: pointer;
+    color: var(--uui-color-danger, #d42054);
+    font-weight: 600;
+}
+
+.all-failures {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
 /* Warning banner shown when the Image media type has no alt-text property */
 .field-warning {
     margin: 0 0 16px;

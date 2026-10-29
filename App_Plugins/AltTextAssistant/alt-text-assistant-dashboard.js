@@ -1,6 +1,7 @@
 import { UmbElementMixin } from "@umbraco-cms/backoffice/element-api";
 import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
 import { UMB_AUTH_CONTEXT } from "@umbraco-cms/backoffice/auth";
+import { umbConfirmModal } from "@umbraco-cms/backoffice/modal";
 
 export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLElement) {
     #notificationContext;
@@ -13,6 +14,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
     #aiEnabled = false;
     #bulkActive = false;
     #bulkAbort = null;
+    #allAbort = null;
 
     static API_BASE = "/umbraco/management/api/v1/alt-text-assistant";
 
@@ -86,6 +88,8 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         this.shadowRoot.getElementById("alt-bulk-suggest-btn")?.addEventListener("click", () => this.#startBulkSuggest());
         this.shadowRoot.getElementById("alt-bulk-save")?.addEventListener("click", () => this.#saveBulkSuggestions());
         this.shadowRoot.getElementById("alt-bulk-cancel")?.addEventListener("click", () => this.#cancelBulkSuggest());
+        this.shadowRoot.getElementById("alt-all-btn")?.addEventListener("click", () => this.#startSuggestAll());
+        this.shadowRoot.getElementById("alt-all-stop")?.addEventListener("click", () => this.#allAbort?.abort());
 
         // Close modal on overlay click
         this.shadowRoot.getElementById("alt-modal")?.addEventListener("click", (e) => {
@@ -142,15 +146,18 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         const suggestBtn = this.shadowRoot.getElementById("alt-modal-suggest");
         const aiNotice = this.shadowRoot.getElementById("alt-ai-notice");
         const bulkBtn = this.shadowRoot.getElementById("alt-bulk-suggest-btn");
+        const allBtn = this.shadowRoot.getElementById("alt-all-btn");
 
         if (this.#aiEnabled) {
             if (suggestBtn) suggestBtn.style.display = "";
             if (aiNotice) aiNotice.style.display = "none";
             if (bulkBtn) bulkBtn.style.display = "";
+            if (allBtn) allBtn.style.display = "";
         } else {
             if (suggestBtn) suggestBtn.style.display = "none";
             if (aiNotice) aiNotice.style.display = "";
             if (bulkBtn) bulkBtn.style.display = "none";
+            if (allBtn) allBtn.style.display = "none";
         }
     }
 
@@ -385,6 +392,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         this.#bulkAbort = new AbortController();
         tableWrap.classList.add("bulk-active");
         bulkBtn.disabled = true;
+        this.shadowRoot.getElementById("alt-all-btn").disabled = true;
         bulkActions.style.display = "";
         bulkSaveBtn.disabled = true;
 
@@ -417,14 +425,17 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
                         signal: this.#bulkAbort.signal,
                     });
 
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    if (!response.ok) {
+                        const err = await response.json().catch(() => ({}));
+                        throw new Error(err.error || `HTTP ${response.status}`);
+                    }
                     const data = await response.json();
                     const text = data.altText || "";
                     cell.innerHTML = `<textarea class="bulk-suggestion-input" rows="2">${this.#escapeHtml(text)}</textarea>`;
                 } catch (err) {
                     if (err.name === "AbortError") return;
                     console.error(`Bulk suggest failed for media ${mediaId}`, err);
-                    cell.innerHTML = `<span class="suggestion-error">Failed</span><textarea class="bulk-suggestion-input" rows="2" placeholder="Type manually..."></textarea>`;
+                    cell.innerHTML = `<span class="suggestion-error" title="${this.#escapeAttr(err.message)}">Failed: ${this.#escapeHtml(err.message)}</span><textarea class="bulk-suggestion-input" rows="2" placeholder="Type manually..."></textarea>`;
                 }
 
                 completed++;
@@ -525,6 +536,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
 
         tableWrap.classList.remove("bulk-active");
         bulkBtn.disabled = false;
+        this.shadowRoot.getElementById("alt-all-btn").disabled = false;
         bulkActions.style.display = "none";
 
         // Clear suggestion cells
@@ -532,6 +544,124 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
             if (cell.closest("uui-table-head")) return;
             cell.innerHTML = "";
         });
+    }
+
+    /**
+     * Suggest + save every image missing alt text, across all pages, without a review step.
+     * Runs in the browser: closing the dashboard stops it, but everything saved so far stays saved.
+     */
+    async #startSuggestAll() {
+        if (this.#allAbort || this.#bulkActive) return;
+        const root = this.shadowRoot;
+        const allBtn = root.getElementById("alt-all-btn");
+        const bulkBtn = root.getElementById("alt-bulk-suggest-btn");
+
+        let images;
+        try {
+            const response = await fetch(`${AltTextAssistantDashboard.API_BASE}/images/all`, { headers: await this.#getAuthHeaders() });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            images = await response.json();
+        } catch (err) {
+            this.#notificationContext?.peek("danger", { data: { headline: "Could not load images", message: err.message } });
+            return;
+        }
+        if (images.length === 0) return;
+
+        try {
+            await umbConfirmModal(this, {
+                headline: `Suggest and save alt text for ${images.length} image${images.length !== 1 ? "s" : ""}?`,
+                content: "AI-written alt text will be saved straight to every image missing it, with no review step. " +
+                    "Each image is one AI request on your API key. Keep this dashboard open until it finishes; " +
+                    "you can stop at any time and anything already saved stays saved.",
+                confirmLabel: "Suggest + save all",
+                color: "positive",
+            });
+        } catch {
+            return; // cancelled
+        }
+
+        const panel = root.getElementById("alt-all-panel");
+        const progressEl = root.getElementById("alt-all-progress");
+        const barFill = root.getElementById("alt-all-bar-fill");
+        const failuresBox = root.getElementById("alt-all-failures-box");
+        const failuresSummary = root.getElementById("alt-all-failures-summary");
+        const failuresList = root.getElementById("alt-all-failures");
+        const stopBtn = root.getElementById("alt-all-stop");
+
+        this.#allAbort = new AbortController();
+        const signal = this.#allAbort.signal;
+        allBtn.disabled = true;
+        bulkBtn.disabled = true;
+        panel.style.display = "";
+        stopBtn.style.display = "";
+        failuresBox.style.display = "none";
+        failuresList.innerHTML = "";
+
+        const total = images.length;
+        const failures = [];
+        let done = 0;
+        let saved = 0;
+        const update = () => {
+            progressEl.textContent = `${signal.aborted ? "Stopped" : done < total ? "Working" : "Finished"}: ` +
+                `${saved} saved, ${failures.length} failed, ${done}/${total} done`;
+            barFill.style.width = `${Math.round((done / total) * 100)}%`;
+        };
+        update();
+
+        const post = async (path, body) => {
+            const response = await fetch(`${AltTextAssistantDashboard.API_BASE}/${path}`, {
+                method: "POST", headers: await this.#getAuthHeaders(), body: JSON.stringify(body), signal,
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw Object.assign(new Error(data.error || `HTTP ${response.status}`), { status: response.status });
+            return data;
+        };
+
+        const queue = [...images];
+        const worker = async () => {
+            while (queue.length > 0 && !signal.aborted) {
+                const image = queue.shift();
+                try {
+                    let suggestion;
+                    // One retry after a pause on upstream errors (rate limits, overloads) so a long run survives them.
+                    try {
+                        suggestion = await post("suggest", { mediaId: image.id });
+                    } catch (err) {
+                        if (err.name === "AbortError" || err.status !== 502) throw err;
+                        await new Promise((r) => setTimeout(r, 5000));
+                        suggestion = await post("suggest", { mediaId: image.id });
+                    }
+                    const altText = (suggestion.altText || "").trim();
+                    if (!altText) throw new Error("The AI returned no text.");
+                    await post("save", { mediaId: image.id, altText });
+                    saved++;
+                } catch (err) {
+                    if (err.name === "AbortError") return;
+                    console.error(`Suggest + save failed for media ${image.id}`, err);
+                    failures.push(image);
+                    const li = document.createElement("li");
+                    li.textContent = `${image.name}: ${err.message}`;
+                    failuresList.appendChild(li);
+                    failuresSummary.textContent = `${failures.length} image${failures.length !== 1 ? "s" : ""} failed (still listed below, add these manually)`;
+                    failuresBox.style.display = "";
+                }
+                done++;
+                update();
+            }
+        };
+
+        await Promise.all([worker(), worker()]);
+        update();
+
+        this.#allAbort = null;
+        stopBtn.style.display = "none";
+        allBtn.disabled = false;
+        bulkBtn.disabled = false;
+        this.#notificationContext?.peek(failures.length ? "warning" : "positive", {
+            data: { headline: "Suggest + save all", message: `${saved} alt text value${saved !== 1 ? "s" : ""} saved, ${failures.length} failed.` },
+        });
+        this.#currentPage = 1;
+        this.#loadImages();
     }
 
     /** Images | Settings switch and the anonymous telemetry toggle + preview. */

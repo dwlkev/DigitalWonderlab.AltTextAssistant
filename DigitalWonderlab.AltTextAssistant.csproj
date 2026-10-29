@@ -7,10 +7,10 @@
 		<!-- NuGet metadata -->
 		<IsPackable>true</IsPackable>
 		<PackageId>DigitalWonderlab.AltTextAssistant</PackageId>
-		<Version>1.1.2</Version>
+		<Version>1.2.0</Version>
 		<Authors>Digital Wonderlab</Authors>
 		<Company>Digital Wonderlab</Company>
-		<Description>Find and fix images missing alt text in Umbraco 17+. Adds a Media section dashboard that lists every image with no alt text, with one-click AI suggestions (Anthropic Claude, OpenAI, or Google Gemini vision) and bulk-suggest across the page. Bring your own API key. Works on Umbraco Cloud and all hosting environments.</Description>
+		<Description>Find and fix images missing alt text in Umbraco 17+. Adds a Media section dashboard that lists every image with no alt text, with one-click AI suggestions (Anthropic Claude, OpenAI, or Google Gemini vision) and bulk suggestions per page or for the whole library. Bring your own API key. Works on Umbraco Cloud and all hosting environments.</Description>
 		<PackageTags>umbraco;umbraco-cms;umbraco-marketplace;accessibility;alt-text;a11y;ai;seo;media</PackageTags>
 		<RepositoryUrl>https://github.com/dwlkev/DigitalWonderlab.AltTextAssistant</RepositoryUrl>
 		<PackageProjectUrl>https://github.com/dwlkev/DigitalWonderlab.AltTextAssistant</PackageProjectUrl>
@@ -31,6 +31,8 @@
 		<PackageReference Include="Umbraco.Cms.Core" Version="[17.0.0,19.0.0)" />
 		<PackageReference Include="Umbraco.Cms.Web.Common" Version="[17.0.0,19.0.0)" />
 		<PackageReference Include="Umbraco.Cms.Api.Management" Version="[17.0.0,19.0.0)" />
+		<!-- ImageSharp for sniffing/re-encoding images before they go to the AI provider (1.2.0). Already in every default Umbraco site. -->
+		<PackageReference Include="Umbraco.Cms.Imaging.ImageSharp" Version="[17.0.0,19.0.0)" />
 	</ItemGroup>
 
 	<ItemGroup>

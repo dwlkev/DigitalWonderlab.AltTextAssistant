@@ -92,33 +92,9 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     [HttpGet("images")]
     public IActionResult GetImages(int page = 1, int pageSize = 25)
     {
-        var imageType = _mediaTypeService.Get("Image");
-        if (imageType == null)
+        var missingAlt = GetMissingAltImages();
+        if (missingAlt == null)
             return NotFound(new { error = "Image media type not found." });
-
-        var alias = AltTextAlias;
-        var missingAlt = new List<IMedia>();
-        var batchIndex = 0;
-        const int batchSize = 500;
-        long totalMediaCount;
-
-        do
-        {
-            var batch = _mediaService.GetPagedOfType(
-                imageType.Id, batchIndex, batchSize, out totalMediaCount);
-
-            foreach (var item in batch)
-            {
-                var altText = item.GetValue<string>(alias);
-                if (string.IsNullOrWhiteSpace(altText) && CanAccess(item))
-                    missingAlt.Add(item);
-            }
-
-            batchIndex++;
-        }
-        while ((long)batchIndex * batchSize < totalMediaCount);
-
-        missingAlt.Sort((a, b) => b.CreateDate.CompareTo(a.CreateDate));
 
         var totalFiltered = missingAlt.Count;
         var totalPages = (int)Math.Ceiling((double)totalFiltered / pageSize);
@@ -147,6 +123,50 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
             pageSize,
             totalPages
         });
+    }
+
+    /// <summary>Every image missing alt text (not just one page), for "Suggest + save all".</summary>
+    [HttpGet("images/all")]
+    public IActionResult GetAllImages()
+    {
+        var missingAlt = GetMissingAltImages();
+        if (missingAlt == null)
+            return NotFound(new { error = "Image media type not found." });
+
+        return Ok(missingAlt.Select(img => new { id = img.Id, name = img.Name }));
+    }
+
+    /// <summary>Images the current user can access with no alt text, newest first. Null if there is no Image type.</summary>
+    private List<IMedia>? GetMissingAltImages()
+    {
+        var imageType = _mediaTypeService.Get("Image");
+        if (imageType == null)
+            return null;
+
+        var alias = AltTextAlias;
+        var missingAlt = new List<IMedia>();
+        var batchIndex = 0;
+        const int batchSize = 500;
+        long totalMediaCount;
+
+        do
+        {
+            var batch = _mediaService.GetPagedOfType(
+                imageType.Id, batchIndex, batchSize, out totalMediaCount);
+
+            foreach (var item in batch)
+            {
+                var altText = item.GetValue<string>(alias);
+                if (string.IsNullOrWhiteSpace(altText) && CanAccess(item))
+                    missingAlt.Add(item);
+            }
+
+            batchIndex++;
+        }
+        while ((long)batchIndex * batchSize < totalMediaCount);
+
+        missingAlt.Sort((a, b) => b.CreateDate.CompareTo(a.CreateDate));
+        return missingAlt;
     }
 
     [HttpPost("save")]
@@ -232,20 +252,23 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
                 imageBytes = ms.ToArray();
             }
 
-            _logger.LogInformation("SuggestAltText: Read {Bytes} bytes, sending to {Provider}", imageBytes.Length, provider);
-
-            var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-            var mimeType = ext switch
+            // MIME type from the file's bytes, not its extension (a mislabelled .webp used to be
+            // rejected by the provider); oversized or unsupported files are re-encoded.
+            AiImagePreparer.PreparedImage prepared;
+            try
             {
-                "jpg" or "jpeg" => "image/jpeg",
-                "png" => "image/png",
-                "gif" => "image/gif",
-                "webp" => "image/webp",
-                "svg" => "image/svg+xml",
-                _ => "image/jpeg"
-            };
+                prepared = AiImagePreparer.Prepare(imageBytes);
+            }
+            catch (AiImagePreparer.UnsupportedImageException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
 
-            var base64 = Convert.ToBase64String(imageBytes);
+            var mimeType = prepared.MimeType;
+            _logger.LogInformation("SuggestAltText: Read {Bytes} bytes, sending {SentBytes} bytes as {MimeType} (re-encoded: {Reencoded}) to {Provider}",
+                imageBytes.Length, prepared.Bytes.Length, mimeType, prepared.Reencoded, provider);
+
+            var base64 = Convert.ToBase64String(prepared.Bytes);
 
             // Dispatch to the active provider
             return provider switch
@@ -543,10 +566,33 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
                 $"The AI service returned an error (HTTP {(int)response.StatusCode}). Please try again later."
         };
 
+        // A 400 says exactly what the provider disliked about the image; pass that on.
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest && ProviderMessage(body) is { } detail)
+            friendlyError += $" ({detail})";
+
         // Always return 502 Bad Gateway for upstream AI errors.
         // Returning 401/403 directly causes ASP.NET auth middleware to
         // intercept and swallow the JSON response body.
         return StatusCode(502, new { error = friendlyError });
+    }
+
+    /// <summary>The error.message all three providers put in their error body, trimmed.</summary>
+    private static string? ProviderMessage(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var err)
+                && err.ValueKind == JsonValueKind.Object
+                && err.TryGetProperty("message", out var msg)
+                && msg.GetString() is { Length: > 0 } text)
+                return text.Length > 300 ? text[..300] + "..." : text;
+        }
+        catch
+        {
+            // Not JSON
+        }
+        return null;
     }
 
     private static string ParseImageSrc(string? umbracoFileValue)

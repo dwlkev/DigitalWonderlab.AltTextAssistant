@@ -1,6 +1,6 @@
 # Alt Text Assistant
 
-An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to the Media section. It lists every image in the media library that has no alt text, lets editors add alt text inline, and — when an AI provider is configured — suggests alt text from the image with a single click, or in bulk across the whole page.
+An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to the Media section. It lists every image in the media library that has no alt text, lets editors add alt text inline, and — when an AI provider is configured — suggests alt text from the image with a single click, in bulk across the current page, or for the whole library in one go.
 
 ![Media section dashboard listing every image missing alt text](screenshots/alt-text-assistant-dashboard.png)
 
@@ -14,6 +14,8 @@ An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to t
 - **Inline editor** with an image preview to add and save alt text without leaving the dashboard
 - **AI suggestions** — one-click "Suggest with AI" reads the image and returns a concise, screen-reader- and SEO-friendly description
 - **Bulk suggest** — generate suggestions for every image on the current page (throttled, cancellable), review, then Save All
+- **Suggest + save all**: work through every image missing alt text across all pages and save the suggestions directly, with a progress bar, a Stop button and a list of anything that needs doing by hand
+- **Works with any image format**: JPEG, PNG, GIF and WebP are sent as they are, matched by their real file contents, and very large or other formats (TIFF, BMP and so on) are resized and converted automatically
 - **Bring your own key** — supports Anthropic Claude, OpenAI, or Google Gemini vision models. First configured key wins
 - **Graceful without AI** — with no key configured the dashboard still works for manual alt text; AI controls are hidden
 - **Works with any Image media type** — the alt-text property alias is configurable, and the dashboard warns clearly if no alt-text field exists

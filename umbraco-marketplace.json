@@ -14,7 +14,7 @@
   },
   "Category": "Editor Tools",
   "IssueTrackerUrl": "https://github.com/dwlkev/DigitalWonderlab.AltTextAssistant/issues",
-  "Description": "Find and fix images missing alt text in Umbraco. A Media section dashboard lists every image with no alt text and lets editors add it inline, with one-click AI suggestions (Anthropic Claude, OpenAI, or Google Gemini vision) and bulk-suggest across the page. Bring your own API key. Works on Umbraco Cloud and all hosting environments.",
+  "Description": "Find and fix images missing alt text in Umbraco. A Media section dashboard lists every image with no alt text and lets editors add it inline, with one-click AI suggestions (Anthropic Claude, OpenAI, or Google Gemini vision) and bulk suggestions per page or for the whole library. Bring your own API key. Works on Umbraco Cloud and all hosting environments.",
   "LicenseTypes": [ "Free" ],
   "PackageType": "Package",
   "Screenshots": [
