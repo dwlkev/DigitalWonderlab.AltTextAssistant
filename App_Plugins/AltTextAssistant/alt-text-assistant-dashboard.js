@@ -165,8 +165,11 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
             el.innerHTML = weak ? "Improve this page &#10024;" : "Bulk Suggest this page &#10024;";
             el.label = weak ? "Improve this page with AI" : "Bulk Suggest this page with AI";
         });
-        // Improvements always get a review step, so there is no "save all" for them.
-        set("alt-all-btn", (el) => { el.style.display = this.#aiEnabled && !weak ? "" : "none"; });
+        set("alt-all-btn", (el) => {
+            el.style.display = this.#aiEnabled ? "" : "none";
+            el.innerHTML = weak ? "Improve + save all &#10024;" : "Suggest + save all &#10024;";
+            el.label = weak ? "Improve and save all with AI" : "Suggest and save all with AI";
+        });
         set("alt-weak-intro", (el) => { el.style.display = weak ? "" : "none"; });
         set("alt-name-head", (el) => { el.textContent = weak ? "Name and current alt text" : "Name"; });
         set("alt-empty-title", (el) => { el.textContent = weak ? "No alt text needs improving" : "All images have alt text"; });
@@ -582,7 +585,8 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
     }
 
     /**
-     * Suggest + save every image missing alt text, across all pages, without a review step.
+     * Across all pages, without a review step: on "Missing alt text", suggest + save every image with none;
+     * on "Needs improving" (1.4.0), rewrite + save every flagged alt text, logging before and after.
      * Runs in the browser: closing the dashboard stops it, but everything saved so far stays saved.
      */
     async #startSuggestAll() {
@@ -590,10 +594,13 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         const root = this.shadowRoot;
         const allBtn = root.getElementById("alt-all-btn");
         const bulkBtn = root.getElementById("alt-bulk-suggest-btn");
+        const improve = this.#mode === "weak";
+        const title = improve ? "Improve + save all" : "Suggest + save all";
 
         let images;
         try {
-            const response = await fetch(`${AltTextAssistantDashboard.API_BASE}/images/all`, { headers: await this.#getAuthHeaders() });
+            const list = improve ? "images/weak/all" : "images/all";
+            const response = await fetch(`${AltTextAssistantDashboard.API_BASE}/${list}`, { headers: await this.#getAuthHeaders() });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             images = await response.json();
         } catch (err) {
@@ -602,13 +609,22 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         }
         if (images.length === 0) return;
 
+        const plural = `${images.length} image${images.length !== 1 ? "s" : ""}`;
         try {
-            await umbConfirmModal(this, {
-                headline: `Suggest and save alt text for ${images.length} image${images.length !== 1 ? "s" : ""}?`,
+            await umbConfirmModal(this, improve ? {
+                headline: `Improve and save alt text for ${plural}?`,
+                content: "The existing alt text on every image in the Needs improving list will be rewritten by AI and " +
+                    "saved straight away, with no review step. A before and after list is kept below the progress bar " +
+                    "while this dashboard is open. Each image is one or two AI requests on your API key. You can stop at " +
+                    "any time and anything already saved stays saved.",
+                confirmLabel: title,
+                color: "warning",
+            } : {
+                headline: `Suggest and save alt text for ${plural}?`,
                 content: "AI-written alt text will be saved straight to every image missing it, with no review step. " +
                     "Each image is one AI request on your API key. Keep this dashboard open until it finishes; " +
                     "you can stop at any time and anything already saved stays saved.",
-                confirmLabel: "Suggest + save all",
+                confirmLabel: title,
                 color: "positive",
             });
         } catch {
@@ -631,14 +647,20 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         stopBtn.style.display = "";
         failuresBox.style.display = "none";
         failuresList.innerHTML = "";
+        const changesBox = root.getElementById("alt-all-changes-box");
+        const changesSummary = root.getElementById("alt-all-changes-summary");
+        const changesList = root.getElementById("alt-all-changes");
+        changesBox.style.display = "none";
+        changesList.innerHTML = "";
 
         const total = images.length;
         const failures = [];
         let done = 0;
         let saved = 0;
+        let unchanged = 0;
         const update = () => {
             progressEl.textContent = `${signal.aborted ? "Stopped" : done < total ? "Working" : "Finished"}: ` +
-                `${saved} saved, ${failures.length} failed, ${done}/${total} done`;
+                `${saved} saved, ${unchanged ? `${unchanged} unchanged, ` : ""}${failures.length} failed, ${done}/${total} done`;
             barFill.style.width = `${Math.round((done / total) * 100)}%`;
         };
         update();
@@ -659,17 +681,37 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
                 try {
                     let suggestion;
                     // One retry after a pause on upstream errors (rate limits, overloads) so a long run survives them.
+                    const request = { mediaId: image.id, improve };
                     try {
-                        suggestion = await post("suggest", { mediaId: image.id });
+                        suggestion = await post("suggest", request);
                     } catch (err) {
                         if (err.name === "AbortError" || err.status !== 502) throw err;
                         await new Promise((r) => setTimeout(r, 5000));
-                        suggestion = await post("suggest", { mediaId: image.id });
+                        suggestion = await post("suggest", request);
                     }
                     const altText = (suggestion.altText || "").trim();
                     if (!altText) throw new Error("The AI returned no text.");
-                    await post("save", { mediaId: image.id, altText });
-                    saved++;
+                    if (improve && altText === (image.altText || "").trim()) {
+                        unchanged++;
+                    } else {
+                        await post("save", { mediaId: image.id, altText });
+                        saved++;
+                        if (improve) {
+                            const li = document.createElement("li");
+                            const name = document.createElement("strong");
+                            name.textContent = image.name;
+                            const before = document.createElement("span");
+                            before.className = "change-before";
+                            before.textContent = image.altText;
+                            const after = document.createElement("span");
+                            after.className = "change-after";
+                            after.textContent = altText;
+                            li.append(name, before, after);
+                            changesList.appendChild(li);
+                            changesSummary.textContent = `${saved} alt text value${saved !== 1 ? "s" : ""} changed (before and after)`;
+                            changesBox.style.display = "";
+                        }
+                    }
                 } catch (err) {
                     if (err.name === "AbortError") return;
                     console.error(`Suggest + save failed for media ${image.id}`, err);
@@ -693,7 +735,7 @@ export default class AltTextAssistantDashboard extends UmbElementMixin(HTMLEleme
         allBtn.disabled = false;
         bulkBtn.disabled = false;
         this.#notificationContext?.peek(failures.length ? "warning" : "positive", {
-            data: { headline: "Suggest + save all", message: `${saved} alt text value${saved !== 1 ? "s" : ""} saved, ${failures.length} failed.` },
+            data: { headline: title, message: `${saved} alt text value${saved !== 1 ? "s" : ""} saved, ${failures.length} failed.` },
         });
         this.#currentPage = 1;
         this.#loadImages();

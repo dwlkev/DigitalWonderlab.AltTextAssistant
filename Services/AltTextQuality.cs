@@ -56,9 +56,15 @@ public static class AltTextQuality
         var norm = Normalise(alt);
         var file = Normalise(fileName);
 
+        // "Acme logo" is exactly what a logo's alt should be, so logos are exempt from the
+        // media-name and duplicate rules (the same logo is often uploaded several times).
+        var isLogo = norm.EndsWith(" logo");
+
         if (file.Length > 0 && norm == file)
             problems.Add("Same as the file name");
-        else if (Normalise(mediaName) is { Length: > 0 } name && norm == name)
+        // A descriptive media name ("Volunteers at the summer fair") is fine as alt text; only a
+        // short one ("Team photo", "Banner 2") is a sign the alt was copied without thinking.
+        else if (!isLogo && Normalise(mediaName) is { Length: > 0 } name && norm == name && name.Split(' ').Length < 3)
             problems.Add("Same as the media name");
 
         if (FileExtension.IsMatch(alt))
@@ -73,9 +79,28 @@ public static class AltTextQuality
             problems.Add("Starts with \"image of\" (screen readers already say it is an image)");
         if (alt.Length > MaxLength)
             problems.Add($"Longer than {MaxLength} characters");
-        if (usedOnImages >= DuplicateThreshold)
+        if (usedOnImages >= DuplicateThreshold && !isLogo)
             problems.Add($"Same alt text used on {usedOnImages} images");
 
         return problems;
+    }
+
+    private static readonly Regex AltPrefix =
+        new(@"^(suggested\s+)?alt(\s*-?\s*text)?\s*[:\-]\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Tidies an AI reply into plain alt text: one line, no surrounding quotes, no "Alt text:" label,
+    /// no markdown emphasis.
+    /// </summary>
+    public static string CleanAiReply(string? reply)
+    {
+        if (string.IsNullOrWhiteSpace(reply)) return string.Empty;
+        var text = Regex.Replace(reply, @"\s+", " ").Trim();
+        text = AltPrefix.Replace(text, "");
+        text = text.Trim('*', '_', '`', ' ');
+        // Strip one layer of matching quotes around the whole reply.
+        if (text.Length >= 2 && "\"'“‘".Contains(text[0]) && "\"'”’".Contains(text[^1]))
+            text = text[1..^1].Trim();
+        return text;
     }
 }

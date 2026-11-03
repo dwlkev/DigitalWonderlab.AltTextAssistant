@@ -21,7 +21,9 @@ An Umbraco backoffice package that adds an **Alt Text Assistant** dashboard to t
 - **Works with any Image media type** — the alt-text property alias is configurable, and the dashboard warns clearly if no alt-text field exists
 - **Edit in Media** shortcut to jump to the full media item
 - **Needs improving**: a second list of images whose alt text is set but not useful (the file name, a camera name like IMG_1234, a placeholder word such as "image" or "logo", "image of...", very long text, or the same text on several images), each with the reason it was flagged
-- **Improve with AI**: rewrites weak alt text using the image and its current text, one at a time or a page at a time, always with a review step before saving
+- **Improve with AI**: rewrites weak alt text using the image, its current text and the reason it was flagged, one at a time or a page at a time with a review step before saving
+- **Improve + save all**: rewrites every flagged alt text across all pages in one go, with a progress bar, a Stop button and a before and after list of every change
+- **Checked AI output**: every suggestion is held to the same rules as the Needs improving list (one short sentence, no file names, no "image of..."), and the AI gets one retry if it breaks them, so AI-written alt text never ends up flagged
 - **Logo-aware**: logos get the organisation name plus "logo" rather than a description of the artwork
 - Missing-count badge so you can see progress at a glance
 
@@ -104,6 +106,7 @@ Without any key configured the AI buttons are hidden and the dashboard works for
 
 - `GET /umbraco/management/api/v1/alt-text-assistant/images` — pages the media library for images with no alt text
 - `GET /umbraco/management/api/v1/alt-text-assistant/images/weak` pages images whose alt text needs improving, with the reasons
+- `GET /umbraco/management/api/v1/alt-text-assistant/images/weak/all` lists every image whose alt text needs improving, for "Improve + save all"
 - `POST /umbraco/management/api/v1/alt-text-assistant/save` — writes the alt-text property back to a media item
 - `POST /umbraco/management/api/v1/alt-text-assistant/suggest` — reads the image and calls the configured AI provider
 - `GET /umbraco/management/api/v1/alt-text-assistant/config` — reports whether AI is enabled, the alt-text alias, and whether that field exists

@@ -374,6 +374,31 @@ uui-table-cell {
     overflow-y: auto;
 }
 
+/* "Improve + save all" before and after log */
+.all-changes {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.all-changes li {
+    margin-bottom: 8px;
+}
+
+.all-changes .change-before,
+.all-changes .change-after {
+    display: block;
+    font-size: 0.9em;
+}
+
+.all-changes .change-before {
+    color: var(--uui-color-text-alt, #68676b);
+}
+
+.all-changes .change-before::before { content: "Before: "; }
+.all-changes .change-after::before { content: "After: "; }
+
 /* Warning banner shown when the Image media type has no alt-text property */
 .field-warning {
     margin: 0 0 16px;

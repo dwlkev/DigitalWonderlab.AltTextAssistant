@@ -42,25 +42,46 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     // sites. Not present on a stock Umbraco install, so it is overridable in config.
     private const string DefaultAltTextAlias = "umbracoAltText";
 
+    // Up to 1.3.0 this said "under 125 characters where possible", and the AI routinely wrote 150-220,
+    // which the "Needs improving" rules (over 150) then flagged. The limit is now firm, and every reply
+    // is checked against those same rules (see SuggestAltText).
     private const string AltTextPrompt =
-        "Write a concise, descriptive alt text for this image suitable for a website. " +
-        "The alt text should be 1-2 sentences (under 125 characters where possible) that describe what is " +
-        "shown in the image for screen reader users and SEO. Do not start with \"Image of\" or \"Picture of\". " +
-        "If the image is a logo, return only the organisation or brand name followed by the word logo, " +
-        "for example \"Northfield Trust logo\". Return only the alt text, nothing else.";
+        "Write alt text for this image, for use on a website.\n" +
+        "Rules:\n" +
+        "- One short sentence, no more than 120 characters. Describe what matters to someone who cannot see " +
+        "the image and leave out minor detail (colours of clothing, background, lighting).\n" +
+        "- Do not start with \"Image of\", \"Picture of\", \"Photo of\", \"Photograph of\" or \"Graphic showing\": " +
+        "screen readers already announce that it is an image.\n" +
+        "- No file names, file extensions or camera names.\n" +
+        "- If the image is a logo, return only the organisation or brand name followed by the word logo, " +
+        "for example \"Northfield Trust logo\".\n" +
+        "- Return only the alt text: no quotes, no label, nothing else.";
 
-    /// <summary>The prompt for one image: names it, and when improving, shows the alt text being replaced.</summary>
-    internal static string BuildPrompt(string? mediaName, string? currentAlt)
+    /// <summary>
+    /// The prompt for one image: names it, and when improving, shows the alt text being replaced and why
+    /// it was flagged (so a "too long" alt gets shortened rather than rewritten at the same length).
+    /// </summary>
+    internal static string BuildPrompt(string? mediaName, string? currentAlt, IReadOnlyList<string>? currentProblems = null)
     {
         var prompt = AltTextPrompt;
         if (!string.IsNullOrWhiteSpace(mediaName))
             prompt += $"\n\nThe image is named \"{mediaName.Trim()}\" in the media library. Use the name only if it " +
                       "helps identify a brand, person or place; ignore it if it looks like a file or camera name.";
         if (!string.IsNullOrWhiteSpace(currentAlt))
-            prompt += $"\n\nIts current alt text is \"{currentAlt.Trim()}\", which has been flagged as not descriptive " +
-                      "enough. Write a better replacement. Keep any correct names from it.";
+        {
+            var why = currentProblems is { Count: > 0 }
+                ? "It was flagged for: " + string.Join("; ", currentProblems) + "."
+                : "It may be shared with other images or not specific enough; describe this image in particular.";
+            prompt += $"\n\nIts current alt text is \"{currentAlt.Trim()}\". {why} Write a better replacement that " +
+                      "fixes this. Keep any correct names from it.";
+        }
         return prompt;
     }
+
+    /// <summary>Follow-up when the AI's own reply breaks the rules: one retry with the specific problems.</summary>
+    internal static string BuildRetryPrompt(string basePrompt, string reply, IReadOnlyList<string> problems) =>
+        basePrompt + $"\n\nA previous attempt returned \"{reply}\", which is not acceptable because: " +
+        string.Join("; ", problems) + ". Write a new alt text that fixes this.";
 
     public AltTextAssistantApiController(
         IMediaService mediaService,
@@ -155,33 +176,9 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
     [HttpGet("images/weak")]
     public IActionResult GetWeakImages(int page = 1, int pageSize = 25)
     {
-        var images = GetAccessibleImages();
-        if (images == null)
+        var weak = GetWeakAltImages();
+        if (weak == null)
             return NotFound(new { error = "Image media type not found." });
-
-        var alias = AltTextAlias;
-        var withAlt = images
-            .Select(img => (img, alt: img.GetValue<string>(alias)?.Trim() ?? ""))
-            .Where(x => x.alt.Length > 0)
-            .ToList();
-
-        // How many images share each alt text, for the "same alt on N images" rule.
-        var usage = withAlt
-            .GroupBy(x => AltTextQuality.Normalise(x.alt))
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        var weak = withAlt
-            .Select(x =>
-            {
-                var src = ParseImageSrc(x.img.GetValue<string>("umbracoFile"));
-                var fileName = src.Split('?')[0].Split('/').LastOrDefault();
-                var reasons = AltTextQuality.Problems(x.alt, x.img.Name, fileName, usage[AltTextQuality.Normalise(x.alt)]);
-                return (x.img, x.alt, src, reasons);
-            })
-            .Where(x => x.reasons.Count > 0)
-            .OrderByDescending(x => x.reasons.Count)
-            .ThenByDescending(x => x.img.CreateDate)
-            .ToList();
 
         var totalPages = (int)Math.Ceiling((double)weak.Count / pageSize);
         var items = weak.Skip((page - 1) * pageSize).Take(pageSize).Select(x => new
@@ -197,6 +194,50 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
 
         return Ok(new { items, totalItems = weak.Count, page, pageSize, totalPages });
     }
+
+    /// <summary>Every image whose alt text needs improving (not just one page), for "Improve all".</summary>
+    [HttpGet("images/weak/all")]
+    public IActionResult GetAllWeakImages()
+    {
+        var weak = GetWeakAltImages();
+        if (weak == null)
+            return NotFound(new { error = "Image media type not found." });
+
+        return Ok(weak.Select(x => new { id = x.img.Id, name = x.img.Name, altText = x.alt, reasons = x.reasons }));
+    }
+
+    /// <summary>Accessible images with alt text that breaks a quality rule, worst first. Null if there is no Image type.</summary>
+    private List<(IMedia img, string alt, string src, List<string> reasons)>? GetWeakAltImages()
+    {
+        var images = GetAccessibleImages();
+        if (images == null)
+            return null;
+
+        var alias = AltTextAlias;
+        var withAlt = images
+            .Select(img => (img, alt: img.GetValue<string>(alias)?.Trim() ?? ""))
+            .Where(x => x.alt.Length > 0)
+            .ToList();
+
+        // How many images share each alt text, for the "same alt on N images" rule.
+        var usage = withAlt
+            .GroupBy(x => AltTextQuality.Normalise(x.alt))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return withAlt
+            .Select(x =>
+            {
+                var src = ParseImageSrc(x.img.GetValue<string>("umbracoFile"));
+                var reasons = AltTextQuality.Problems(x.alt, x.img.Name, FileNameOf(src), usage[AltTextQuality.Normalise(x.alt)]);
+                return (x.img, x.alt, src, reasons);
+            })
+            .Where(x => x.reasons.Count > 0)
+            .OrderByDescending(x => x.reasons.Count)
+            .ThenByDescending(x => x.img.CreateDate)
+            .ToList();
+    }
+
+    private static string? FileNameOf(string src) => src.Split('?')[0].Split('/').LastOrDefault();
 
     /// <summary>Images the current user can access with no alt text, newest first. Null if there is no Image type.</summary>
     private List<IMedia>? GetMissingAltImages()
@@ -335,16 +376,40 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
                 imageBytes.Length, prepared.Bytes.Length, mimeType, prepared.Reencoded, provider);
 
             var base64 = Convert.ToBase64String(prepared.Bytes);
-            var prompt = BuildPrompt(media.Name, request.Improve ? media.GetValue<string>(AltTextAlias) : null);
+            var fileName = FileNameOf(filePath);
+            var currentAlt = request.Improve ? media.GetValue<string>(AltTextAlias)?.Trim() : null;
+            var currentProblems = string.IsNullOrEmpty(currentAlt)
+                ? null
+                : AltTextQuality.Problems(currentAlt, media.Name, fileName);
+            var prompt = BuildPrompt(media.Name, currentAlt, currentProblems);
 
-            // Dispatch to the active provider
-            return provider switch
+            var (reply, error) = await Ask(provider, apiKey!, base64, mimeType, prompt);
+            if (error != null) return error;
+            var text = AltTextQuality.CleanAiReply(reply);
+
+            // Hold the AI to the same rules the "Needs improving" list uses, so AI-written alt text
+            // never ends up flagged there. One retry, telling it exactly what was wrong; keep whichever
+            // attempt has fewer problems.
+            var problems = AltTextQuality.Problems(text, media.Name, fileName);
+            if (text.Length == 0 || problems.Count > 0)
             {
-                "Anthropic" => await CallAnthropic(apiKey!, base64, mimeType, prompt),
-                "OpenAI" => await CallOpenAI(apiKey!, base64, mimeType, prompt),
-                "Google" => await CallGemini(apiKey!, base64, mimeType, prompt),
-                _ => BadRequest(new { error = $"Unknown provider: {provider}" })
-            };
+                var why = text.Length == 0 ? new List<string> { "it was empty" } : problems;
+                _logger.LogInformation("SuggestAltText: retrying media {MediaId}, first reply had problems: {Problems}",
+                    request.MediaId, string.Join("; ", why));
+                var (retryReply, retryError) = await Ask(provider, apiKey!, base64, mimeType, BuildRetryPrompt(prompt, text, why));
+                var retryText = AltTextQuality.CleanAiReply(retryReply);
+                if (retryError == null && retryText.Length > 0)
+                {
+                    var retryProblems = AltTextQuality.Problems(retryText, media.Name, fileName);
+                    if (text.Length == 0 || retryProblems.Count <= problems.Count)
+                        (text, problems) = (retryText, retryProblems);
+                }
+            }
+
+            if (text.Length == 0)
+                return StatusCode(502, new { error = "The AI returned no text." });
+
+            return Ok(new { altText = text, problems });
         }
         catch (Exception ex)
         {
@@ -422,11 +487,21 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
         });
     }
 
+    /// <summary>One request to the active provider: the reply text, or an error result to return as-is.</summary>
+    private Task<(string? text, IActionResult? error)> Ask(string provider, string apiKey, string base64, string mimeType, string prompt) =>
+        provider switch
+        {
+            "Anthropic" => CallAnthropic(apiKey, base64, mimeType, prompt),
+            "OpenAI" => CallOpenAI(apiKey, base64, mimeType, prompt),
+            "Google" => CallGemini(apiKey, base64, mimeType, prompt),
+            _ => Task.FromResult<(string?, IActionResult?)>((null, BadRequest(new { error = $"Unknown provider: {provider}" })))
+        };
+
     // ──────────────────────────────────────────────
     // Anthropic Claude — Messages API with vision
     // Docs: https://docs.anthropic.com/en/docs/build-with-claude/vision
     // ──────────────────────────────────────────────
-    private async Task<IActionResult> CallAnthropic(string apiKey, string base64, string mimeType, string prompt)
+    private async Task<(string? text, IActionResult? error)> CallAnthropic(string apiKey, string base64, string mimeType, string prompt)
     {
         var client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Add("x-api-key", apiKey);
@@ -463,19 +538,19 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
 
         var (response, body) = await PostJson(client, "https://api.anthropic.com/v1/messages", payload);
         if (!response.IsSuccessStatusCode)
-            return ProviderError(response, body);
+            return (null, ProviderError(response, body));
 
         // Response shape: { content: [{ type: "text", text: "..." }] }
         using var doc = JsonDocument.Parse(body);
         var text = doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString()?.Trim() ?? "";
-        return Ok(new { altText = text });
+        return (text, null);
     }
 
     // ──────────────────────────────────────────────
     // OpenAI — Chat Completions API with vision
     // Docs: https://platform.openai.com/docs/guides/vision
     // ──────────────────────────────────────────────
-    private async Task<IActionResult> CallOpenAI(string apiKey, string base64, string mimeType, string prompt)
+    private async Task<(string? text, IActionResult? error)> CallOpenAI(string apiKey, string base64, string mimeType, string prompt)
     {
         var client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -509,7 +584,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
 
         var (response, body) = await PostJson(client, "https://api.openai.com/v1/chat/completions", payload);
         if (!response.IsSuccessStatusCode)
-            return ProviderError(response, body);
+            return (null, ProviderError(response, body));
 
         // Response shape: { choices: [{ message: { content: "..." } }] }
         using var doc = JsonDocument.Parse(body);
@@ -518,14 +593,14 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
             .GetProperty("message")
             .GetProperty("content")
             .GetString()?.Trim() ?? "";
-        return Ok(new { altText = text });
+        return (text, null);
     }
 
     // ──────────────────────────────────────────────
     // Google Gemini — GenerateContent API with inline image
     // Docs: https://ai.google.dev/gemini-api/docs/vision
     // ──────────────────────────────────────────────
-    private async Task<IActionResult> CallGemini(string apiKey, string base64, string mimeType, string prompt)
+    private async Task<(string? text, IActionResult? error)> CallGemini(string apiKey, string base64, string mimeType, string prompt)
     {
         var client = _httpClientFactory.CreateClient();
 
@@ -557,7 +632,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
         var (response, body) = await PostJson(client, url, payload);
         if (!response.IsSuccessStatusCode)
-            return ProviderError(response, body);
+            return (null, ProviderError(response, body));
 
         // Response shape: { candidates: [{ content: { parts: [{ text: "..." }] } }] }
         using var doc = JsonDocument.Parse(body);
@@ -567,7 +642,7 @@ public class AltTextAssistantApiController : ManagementApiControllerBase
             .GetProperty("parts")[0]
             .GetProperty("text")
             .GetString()?.Trim() ?? "";
-        return Ok(new { altText = text });
+        return (text, null);
     }
 
     // ──────────────────────────────────────────────
